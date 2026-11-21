@@ -59,18 +59,29 @@ Docker 服务为 `frontend`、`backend`、`worker`、`db`、`redis`。数据库�
 
 标签候选只在变更影响已排轮次时进入主管台。确认与标记待改排在同一事务提交。凉湿、温和、暖干对应预设的 20、35、50 分钟。改排保留最初版本引用，审计附前后版本、时段与时长。录入采收观察要求轮次已完灌、时间相符且每轮仅一笔。三类标签和滴灌时长是基于合成观测的演示规则。传感器和执行设备通过人员录入与登记协作。
 
+## 试种地与试判
+
+- **建档即试种**：新租地块登记后 `lifecycle` 为 `trial`，在坡畦图上以虚线边界区分。试种地块没有生效标签，不能安排滴灌；只有主管可在地块页执行转正（`POST /blocks/{id}/promote`），转正后身份变为 `official`。
+- **读数不参与拟合**：识别批次的采样快照只纳入正式地块，因此试种地的读数不会改变 GaussianMixture 的拟合结果，也不影响六地块最小样本与覆盖阻断口径。
+- **试判复用已生效模型**：群落页对试种地发起试判（`POST /blocks/{id}/trial-judgments`）时，后台取出当前已生效批次随证据留存的完整模型参数（标准化器、权重、均值、对角协方差、组件→群落映射），对该地块三日六笔读数执行一次 E-step 后验计算，不重新拟合。缺测超过 25% 同样阻断。
+- **重试不新增记录**：每块试种地只有一行 `trial_judgment`。再次试判在原行上覆盖结论、`attempts` 加一，旧结论连同其基准批次号压入 `history` 留查；前端试判留痕表保留全部版本。
+- **新基准使旧试判过期**：主管发布新模型（新的 effective 批次）时，其他基准批次下状态为 `current` 的试判自动置为 `expired`，记录本身保留。过期试判必须以不早于新基准窗口的读数重算，重算后恢复 `current`；转正时试判行置为 `archived`。
+- **转正与拟合排队**：若转正时已有 `queued` 批次，该批次快照在入队时已冻结，沿用原地块名单；转正后新提交的批次才把该地块计入拟合。排灌仍以生效 `climate_label` 为准，试判结论不产生标签。
+
 ## 代码职责
 
 | 路径 | 说明 |
 |---|---|
 | `backend/migrations/001_field_ledger.sql` | 领域表、外键、版本和活动状态约束 |
+| `backend/migrations/002_trial_blocks.sql` | 地块试种/正式身份与试判记录表 |
 | `backend/src/schemas.py`、`backend/src/domain.py` | API 输入与领域枚举 |
 | `backend/src/app.py`、`backend/src/auth.py`、`backend/src/db.py` | 路由、权限、中间件、连接和审计 |
 | `backend/src/fieldbook.py`、`clusters.py`、`irrigation.py` | 地块采样、标签发布及滴灌与采收事务 |
-| `backend/src/mixture.py`、`backend/src/worker.py` | GaussianMixture 拟合、Redis 通知、数据库恢复与文件证据 |
+| `backend/src/trials.py`、`mixture.py` | 试种地试判、模型参数复用与 GaussianMixture 拟合 |
+| `backend/src/worker.py` | Redis 通知、数据库恢复与文件证据 |
 | `backend/scripts/seed_demo.py` | 幂等初始化演示数据 |
 | `frontend/src/api.js`、`main.js`、`ui.js` | 原生 ES modules 的 API、会话与页面状态、共享组件 |
-| `frontend/src/blocks.js`、`clusters.js`、`irrigation.js` | 勘测图、识别批次、排灌、采收表单和账簿 |
+| `frontend/src/blocks.js`、`clusters.js`、`irrigation.js` | 勘测图、识别批次与试判、排灌、采收表单和账簿 |
 
 共享枚举 `Role`、`Slot`、`Profile`、`RoundState` 定义于 `backend/src/domain.py`、`frontend/src/domain.js`，数据库约束位于 `backend/migrations/001_field_ledger.sql`。识别批次与标签状态在数据库约束和 `backend/src/clusters.py` 中迁移，在 `frontend/src/domain.js` 中映射显示。
 

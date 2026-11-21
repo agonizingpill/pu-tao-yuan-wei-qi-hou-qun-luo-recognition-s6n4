@@ -44,13 +44,16 @@ async function render(message='') {
       const blocks = await api('/blocks');
       const block = blocks.find(b => b.id === state.block) || blocks[1] || blocks[0];
       const history = block ? await api(`/blocks/${block.id}/samples`) : [];
-      body = blockPage(blocks, block, history, editable);
+      body = blockPage(blocks, block, history, editable, supervisor);
     } else if (page === 'clusters') {
-      const [runs, labels] = await Promise.all([api('/runs'),api('/labels')]);
+      const [runs, labels, trialJudgments] = await Promise.all(
+        [api('/runs'), api('/labels'), api('/trial-judgments')]);
+      const blocks = await api('/blocks');
       const id = runs.find(r => r.id === state.run)?.id || runs[0]?.id;
       const run = id ? await api(`/runs/${id}`) : null;
       queued = run?.status === 'queued';
-      body = clusterPage(runs, run, labels, editable, supervisor);
+      body = clusterPage(runs, run, labels, editable, supervisor,
+        blocks.filter(b => b.lifecycle === 'trial'), trialJudgments);
     } else if (page === 'irrigation') {
       const [blocks, rounds] = await Promise.all([api('/blocks'),api('/rounds')]);
       body = irrigationPage(blocks, rounds, rounds.find(r => r.id === state.round), editable, supervisor);
@@ -107,6 +110,14 @@ async function mutate(action, data, id) {
     case 'retry':
       await api(`/runs/${id}/retry`,{});
       return '原采样快照已重新入队。';
+    case 'trial': {
+      const blockId = numeric(data,'block_id').block_id;
+      const j = await api(`/blocks/${blockId}/trial-judgments`, {window_end: data.window_end});
+      return `已按基准批次 #${j.baseline_run_id} 试判 ${j.block_code}：${j.profile}（后验 ${(j.confidence*100).toFixed(1)}%）。`;
+    }
+    case 'promote':
+      await api(`/blocks/${id}/promote`, {});
+      return '地块已转正，自下一个识别批次起纳入拟合；已入队批次仍沿用原地块名单。';
     case 'schedule': {
       const round = await api('/rounds', {...numeric(data,'block_id'), starts_at:chinaTime(data.starts_at)});
       state.round = round.id;

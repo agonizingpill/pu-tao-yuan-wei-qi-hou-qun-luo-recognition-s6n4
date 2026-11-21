@@ -4,3 +4,5 @@ export const slots = {day: '日间', night: '夜间'};
 export const roundStates = {scheduled: '已排', needs_replan: '待改排', completed: '已完灌', cancelled: '已取消'};
 export const runStates = {blocked: '缺测阻断', queued: '等待计算', effective: '已生效', review: '待主管确认', rejected: '未采用', failed: '计算失败'};
 export const tagStates = {active: '生效', superseded: '已归档', proposed: '候选', rejected: '未采用'};
+export const lifecycles = {trial: '试种地', official: '正式地块'};
+export const trialStates = {current: '当前试判', expired: '已过期待重算', archived: '已转正归档'};

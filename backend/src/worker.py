@@ -9,6 +9,17 @@ from .mixture import fit_profiles
 logger = logging.getLogger('vineyard.worker')
 
 
+def seed_trial_block():
+    # 演示种子：基线模型生效后再建试种地并完成首笔试判，避免试读进入拟合。
+    try:
+        from backend.scripts.seed_demo import seed_trial
+        import os
+        if os.getenv('SEED_DEMO', 'true').lower() == 'true' and seed_trial():
+            logger.info('Seeded trial block with a judgment against the effective baseline')
+    except Exception:
+        logger.exception('Trial block seeding skipped')
+
+
 def consume_one():
     with connect() as db:
         lock_ledger(db)
@@ -47,11 +58,13 @@ def main():
     logging.basicConfig(level=logging.INFO)
     client = redis_client()
     heartbeat = Path('/tmp/field-heartbeat')
+    seed_trial_block()
     while True:
         try:
             client.blpop(QUEUE, timeout=2)
             # The persisted status recovers work even if a notification or worker is lost.
             consume_one()
+            seed_trial_block()
             heartbeat.touch()
         except Exception:
             logger.exception('Worker iteration failed')

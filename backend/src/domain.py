@@ -25,4 +25,15 @@ class RoundState(StrEnum):
     CANCELLED = 'cancelled'
 
 
+class Lifecycle(StrEnum):
+    TRIAL = 'trial'
+    OFFICIAL = 'official'
+
+
+class TrialStatus(StrEnum):
+    CURRENT = 'current'
+    EXPIRED = 'expired'
+    ARCHIVED = 'archived'
+
+
 MINUTES = {Profile.COOL: 20, Profile.BALANCED: 35, Profile.WARM: 50}

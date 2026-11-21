@@ -11,7 +11,7 @@ from redis.exceptions import RedisError
 
 from backend.scripts.seed_demo import seed
 from .operations_evidence import router as operations_evidence
-from . import clusters, fieldbook, irrigation, schemas
+from . import clusters, fieldbook, irrigation, schemas, trials
 from .auth import check_password, identity, issue, require
 from .db import EVIDENCE_DIR, QUEUE, connect, lock_ledger, migrate, redis_client
 from .domain import Role
@@ -100,6 +100,26 @@ def new_block(data: schemas.BlockInput, user=editable):
 def samples(block_id: int, _user=readable):
     with connect() as db:
         return fieldbook.sample_list(db, block_id)
+
+
+@app.post('/blocks/{block_id}/promote', status_code=200)
+def promote(block_id: int, user=supervised):
+    with connect() as db:
+        lock_ledger(db)
+        return fieldbook.promote(db, block_id, user['name'])
+
+
+@app.get('/trial-judgments')
+def trial_judgments(_user=readable):
+    with connect() as db:
+        return trials.list_judgments(db)
+
+
+@app.post('/blocks/{block_id}/trial-judgments', status_code=201)
+def judge_trial(block_id: int, data: schemas.TrialJudgeInput, user=editable):
+    with connect() as db:
+        lock_ledger(db)
+        return trials.judge(db, block_id, data.window_end, user['name'])
 
 
 @app.post('/samples', status_code=201)

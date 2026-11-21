@@ -20,7 +20,10 @@ def run_detail(db, run_id):
 
 def make_snapshot(db, end):
     start = end - timedelta(days=2)
-    blocks = db.execute('SELECT id,code,sensor FROM vine_block ORDER BY code').fetchall()
+    blocks = db.execute("""
+        SELECT id,code,sensor FROM vine_block
+        WHERE lifecycle='official' ORDER BY code
+    """).fetchall()
     samples = db.execute('''
         SELECT id,block_id,observed_day,slot,temp_c,rh_pct,source
         FROM microclimate_sample WHERE observed_day BETWEEN %s AND %s ORDER BY observed_day,slot,id
@@ -92,6 +95,11 @@ def publish(db, run_id, actor, reason, affected):
         db.execute("UPDATE irrigation_round SET state='needs_replan' WHERE id=ANY(%s)",
                    ([item['id'] for item in affected],))
     db.execute("UPDATE climate_run SET status='effective' WHERE id=%s", (run_id,))
+    # 新基准发布后，旧基准下的试判结论过期，记录本身保留备查。
+    db.execute('''
+        UPDATE trial_judgment SET status='expired', updated_at=now()
+        WHERE status='current' AND baseline_run_id<>%s
+    ''', (run_id,))
     event(db, actor, 'labels_published', run_id, reason=reason, impact=[item['code'] for item in affected])
 
 

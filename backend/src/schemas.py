@@ -51,6 +51,10 @@ class RunInput(Input):
     window_end: date
 
 
+class TrialJudgeInput(Input):
+    window_end: date
+
+
 class DecisionInput(Input):
     approve: bool
     reason: Narrative

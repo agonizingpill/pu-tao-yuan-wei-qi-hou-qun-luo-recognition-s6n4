@@ -136,3 +136,8 @@ form > label,form > .fields {width:100%}
   .login-wrap {min-height:0}.actor {font-size:.74rem;gap:.55rem}
 }
 @media (prefers-reduced-motion:reduce) {*,*::before,*::after {animation:none!important;transition:none!important}}
+
+/* 试种地：虚线边界与身份标签 */
+.parcel.trial {border-style:dashed;border-width:2px;border-color:oklch(45% .05 265 / .75);
+  background-image:repeating-linear-gradient(40deg,transparent 0 8px,oklch(45% .06 265 / .14) 9px 10px,transparent 11px 13px)}
+.tag.active {background-color:var(--olive);border-color:oklch(45% .08 130 / .45)}

@@ -12,8 +12,12 @@ def one(db, sql, params, what):
 
 def block_list(db):
     return db.execute('''
-        SELECT b.*, l.profile, l.revision, l.confidence
-        FROM vine_block b LEFT JOIN climate_label l ON l.block_id=b.id AND l.state='active'
+        SELECT b.*, l.profile, l.revision, l.confidence,
+               t.status AS trial_status, t.profile AS trial_profile,
+               t.confidence AS trial_confidence, t.baseline_run_id, t.window_end AS trial_window_end
+        FROM vine_block b
+        LEFT JOIN climate_label l ON l.block_id=b.id AND l.state='active'
+        LEFT JOIN trial_judgment t ON t.block_id=b.id
         ORDER BY b.code
     ''').fetchall()
 
@@ -27,11 +31,11 @@ def register(db, data, actor):
     if existing:
         raise HTTPException(409, f"勘测边界与 {existing['code']} 重叠")
     row = db.execute('''
-        INSERT INTO vine_block(code,name,cultivar,area_ha,sensor,east_m,north_m,width_m,height_m)
-        VALUES (%(code)s,%(name)s,%(cultivar)s,%(area_ha)s,%(sensor)s,%(east_m)s,%(north_m)s,%(width_m)s,%(height_m)s)
+        INSERT INTO vine_block(code,name,cultivar,area_ha,sensor,east_m,north_m,width_m,height_m,lifecycle)
+        VALUES (%(code)s,%(name)s,%(cultivar)s,%(area_ha)s,%(sensor)s,%(east_m)s,%(north_m)s,%(width_m)s,%(height_m)s,'trial')
         RETURNING *
     ''', data).fetchone()
-    event(db, actor, 'block_registered', row['code'], sensor=row['sensor'])
+    event(db, actor, 'block_registered', row['code'], sensor=row['sensor'], lifecycle='trial')
     return row
 
 
@@ -55,3 +59,18 @@ def sample_list(db, block_id):
         SELECT * FROM microclimate_sample WHERE block_id=%s
         ORDER BY observed_day DESC, slot LIMIT 120
     ''', (block_id,)).fetchall()
+
+
+def promote(db, block_id, actor):
+    block = one(db, 'SELECT * FROM vine_block WHERE id=%s', (block_id,), '地块')
+    if block['lifecycle'] == 'official':
+        raise HTTPException(409, f"{block['code']} 已是正式地块，无需转正")
+    queued = db.execute("SELECT 1 FROM climate_run WHERE status='queued' LIMIT 1").fetchone()
+    db.execute("UPDATE vine_block SET lifecycle='official' WHERE id=%s", (block_id,))
+    judgment = db.execute('SELECT * FROM trial_judgment WHERE block_id=%s', (block_id,)).fetchone()
+    if judgment is not None:
+        db.execute("UPDATE trial_judgment SET status='archived', updated_at=now() WHERE block_id=%s", (block_id,))
+    event(db, actor, 'block_promoted', block['code'],
+          queued_run=queued is not None,
+          trial_baseline_run_id=judgment['baseline_run_id'] if judgment else None)
+    return one(db, 'SELECT * FROM vine_block WHERE id=%s', (block_id,), '地块')
